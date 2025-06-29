@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import React, {
   createContext,
   useContext,
@@ -134,7 +135,7 @@ export const FloorManagementProvider = ({ children }) => {
       ...tableType,
       x: position.x,
       y: position.y,
-      id: `table-${Date.now()}-${Math.random()}`,
+      id: `table-${nanoid()}}`,
       tableNumber: tables.length + 1,
       status: "free",
       color: statusColor,
@@ -285,6 +286,7 @@ export const FloorManagementProvider = ({ children }) => {
 
     // Setters
     setSelectedId,
+    setTables,
     setStatusFilter,
 
     // Functions
@@ -292,6 +294,7 @@ export const FloorManagementProvider = ({ children }) => {
     updateTablePosition,
     deleteTable,
     clearAllTables,
+    checkOverlap,
     changeTableStatus,
     setReservationTime,
     duplicateTable,
