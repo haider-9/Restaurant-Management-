@@ -196,16 +196,20 @@ const FloorManagement = () => {
     if (!dragUrl.current) return;
 
     const stage = stageRef.current;
-    const rect = stage.container().getBoundingClientRect();
     const pointerPosition = stage.getPointerPosition();
+    // Use actual stage transform for correct placement
+    const stagePos = stage.position();
+    const stageScale = stage.scale();
+    const x = (pointerPosition.x - stagePos.x) / stageScale.x;
+    const y = (pointerPosition.y - stagePos.y) / stageScale.y;
 
     // Assign random color variation
     const randomColor = colorVariations[Math.floor(Math.random() * colorVariations.length)];
 
     const newTable = {
       ...dragUrl.current,
-      x: (pointerPosition.x - position.x) / scale,
-      y: (pointerPosition.y - position.y) / scale,
+      x,
+      y,
       id: `table-${Date.now()}-${Math.random()}`,
       tableNumber: tables.length + 1,
       color: randomColor,
@@ -1790,6 +1794,7 @@ const FloorManagement = () => {
                 
                 {!selectedTable && (
                   <div className="text-center py-4 text-gray-400">
+
                     <p>Select a table to manage reservations</p>
                   </div>
                 )}
