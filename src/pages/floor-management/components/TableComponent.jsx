@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Group, Rect, Text, Circle, Image as KonvaImage } from "react-konva";
 import { Portal } from "react-konva-utils";
 import useImage from "use-image";
@@ -6,11 +6,9 @@ import useImage from "use-image";
 const TableSVG = ({ table, onLoad }) => {
   const [image] = useImage(table.svgPath);
 
-  useEffect(() => {
-    if (image && onLoad) {
-      onLoad(image);
-    }
-  }, [image, onLoad]);
+  if (image && onLoad) {
+    onLoad(image);
+  }
 
   if (!image) return null;
 
@@ -35,9 +33,9 @@ const TableComponent = ({
   const [isDragging, setIsDragging] = useState(false);
   const [tableImage, setTableImage] = useState(null);
 
-  // Increased table size
-  const standardWidth = 120;
-  const standardHeight = 120;
+  // Increased table size with special case for 1 seater
+  const standardWidth = table.seats === 1 ? 80 : 120;
+  const standardHeight = table.seats === 1 ? 120 : 120;
 
   const handleImageLoad = (image) => {
     setTableImage(image);
@@ -68,14 +66,14 @@ const TableComponent = ({
       <TableSVG
         table={{
           ...table,
-          width: standardWidth,
-          height: standardHeight,
+          width: table.type !== "table" ? table.width : standardWidth,
+          height: table.type !== "table" ? table.height : standardHeight,
         }}
         onLoad={handleImageLoad}
       />
 
       {/* Table number - */}
-      {table.seats !== 1 && (
+      {table.type === "table" && table.seats !== 1 && (
         <Text
           x={0}
           y={standardHeight / 2 - 12}
@@ -90,7 +88,7 @@ const TableComponent = ({
       )}
 
       {/* Seat count  */}
-      {table.seats !== 1 && (
+      {table.type === "table" && table.seats !== 1 && (
         <Text
           x={0}
           y={standardHeight / 2 + 8}
@@ -135,32 +133,13 @@ const TableComponent = ({
               stroke="#ff0000"
               strokeWidth={2}
             />
-            <Rect
-              x={-2}
-              y={-8}
-              width={4}
-              height={16}
-              fill="white"
-              cornerRadius={2}
-            />
-            <Rect
-              x={-8}
-              y={-2}
-              width={16}
-              height={4}
-              fill="white"
-              cornerRadius={2}
-            />
-            {/* Pin tooltip */}
             <Text
-              x={-25}
-              y={20}
-              text="Drag to swap"
-              fontSize={9}
-              fill="#333"
-              fontFamily="Arial"
-              align="center"
-              width={50}
+              x={-4}
+              y={-5}
+              text="R"
+              fontSize={12}
+              fill="white"
+              fontStyle="bold"
             />
           </Group>
         </Portal>

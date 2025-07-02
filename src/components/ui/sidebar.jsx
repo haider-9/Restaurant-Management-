@@ -25,7 +25,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "24rem"
+const SIDEBAR_WIDTH = "22rem"
 const SIDEBAR_WIDTH_MOBILE = "22rem"
 const SIDEBAR_WIDTH_ICON = "5rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -129,7 +129,7 @@ function SidebarProvider({
 }
 
 function Sidebar({
-  side = "right",
+  side = "left",
   variant = "sidebar",
   collapsible = "offcanvas",
   className,
