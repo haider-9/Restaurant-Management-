@@ -1,4 +1,3 @@
-import { useFloorManagement } from "../context/FloorManagementContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,19 +16,18 @@ import {
   Clock,
   Users,
   MapPin,
-  Calendar,
-  GripVertical,
   UserCheck,
   Shield,
   User,
-  Square,
-  PenTool,
   Sidebar,
   SidebarClose,
-  Brush,
+  Square,
+  Circle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TimePicker from "./time-picker";
+import { useFloorManagement } from "../hooks/use-Floor-Management";
+import { floorElements, tableStatuses, tableTypes } from "../constants";
 
 const ReservationCard = ({
   table,
@@ -76,69 +74,27 @@ const ReservationCard = ({
 
 const AppSidebar = () => {
   const {
-    tables,
     sidebarVisible,
-    tableTypes,
-    tableStatuses,
     dragUrl,
     userRole,
     drawingMode,
+    circleDrawingMode,
     setSelectedId,
     changeTableStatus,
     setReservationTime,
     setReservationName,
     formatTime,
-    formatDate,
     getSelectedTable,
     toggleSidebar,
     setUserRole,
     setDrawingMode,
+    setCircleDrawingMode,
+    elements,
   } = useFloorManagement();
 
   const selectedTable = getSelectedTable();
-  
-  const floorElements = [
-    {
-      id: "door",
-      name: "Door",
-      path: "/Tables/door.svg",
-      width: 48,
-      height: 96,
-      type: "door",
-    },
-    {
-      id: "dustbin",
-      name: "Dustbin",
-      path: "/Dustbin.png",
-      width: 50,
-      height: 60,
-      type: "dustbin",
-    },
-    {
-      id: "plant",
-      name: "Plant",
-      path: "/Plant.png",
-      width: 50,
-      height: 60,
-      type: "plant",
-    },
-    {
-      id: "plant-2",
-      name: "Plant",
-      path: "/Plant 2.png",
-      width: 50,
-      height: 60,
-      type: "plant-2",
-    },
-    {
-      id: "plant-3",
-      name: "Plant",
-      path: "/Plant 3.png",
-      width: 50,
-      height: 60,
-      type: "plant-3",
-    },
-  ];
+
+  const tables = elements.filter((element) => element.type === "table");
 
   const handleDragStart = (e, tableType) => {
     if (userRole !== "admin") return;
@@ -185,8 +141,15 @@ const AppSidebar = () => {
     }
   };
 
-  const toggleDrawingMode = () => {
+  // New: Drawing mode handlers for SVG icons
+  const handleBarDrawClick = () => {
+    if (circleDrawingMode) setCircleDrawingMode(false);
     setDrawingMode(!drawingMode);
+  };
+
+  const handleCircleDrawClick = () => {
+    if (drawingMode) setDrawingMode(false);
+    setCircleDrawingMode(!circleDrawingMode);
   };
 
   // Filter tables to only show actual tables (not doors or other elements)
@@ -386,66 +349,6 @@ const AppSidebar = () => {
                 </Card>
               )}
 
-            {/* Admin-only Selected Table Controls */}
-            {userRole === "admin" && selectedTable && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    {selectedTable.type === "table" ? (
-                      <>
-                        <Users className="h-4 w-4" />
-                        Table T{selectedTable.tableNumber} Settings
-                      </>
-                    ) : (
-                      <>
-                        <GripVertical className="h-4 w-4" />
-                        {selectedTable.name || selectedTable.type} Settings
-                      </>
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Separator className="bg-gray-700" />
-
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    {selectedTable.type === "table" && (
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        <span>Seats: {selectedTable.seats}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      <span>
-                        Position: ({Math.round(selectedTable.x)},{" "}
-                        {Math.round(selectedTable.y)})
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="h-4 w-4" />
-                      <span>
-                        Size: {selectedTable.width}×{selectedTable.height}
-                      </span>
-                    </div>
-                    {selectedTable.createdAt && (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        <span>
-                          Created: {formatTime(selectedTable.createdAt)}{" "}
-                          {formatDate(selectedTable.createdAt)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        Type: {selectedTable.type}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Admin-only Floor Elements */}
             {userRole === "admin" && (
               <Card>
@@ -456,25 +359,69 @@ const AppSidebar = () => {
                   <div className="mb-2 flex items-baseline gap-2">
                     {floorElements.map((el) => (
                       <div key={el.id} className="">
-                        <img
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, el)}
-                          height={el.height}
-                          width={el.width}
-                          src={el.path}
-                          alt={el.name}
-                        />
+                        {el.path.endsWith('.svg') ? (
+                          <svg
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, el)}
+                            width={el.width}
+                            height={el.height}
+                            className="object-contain"
+                          >
+                            <image href={el.path} width={el.width} height={el.height} />
+                          </svg>
+                        ) : (
+                          <img
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, el)}
+                            height={el.height}
+                            width={el.width}
+                            src={el.path}
+                            alt={el.name}
+                            className="object-contain"
+                          />
+                        )}
                       </div>
                     ))}
                   </div>
-                  <div onClick={toggleDrawingMode}>
-                    <img
-                      src="/Bar.svg"
-                      alt="bar"
-                      className={cn(
-                        drawingMode && "border-2 border-violet rounded-lg"
-                      )}
-                    />
+                  <div className="flex gap-2 mt-2">
+                    {/* Bar SVG as button */}
+                    <div
+                      className="w-1/2 flex flex-col items-center cursor-pointer"
+                      onClick={handleBarDrawClick}
+                      title={drawingMode ? "Stop Drawing Bar" : "Draw Bar"}
+                    >
+                      <svg
+                        width="112"
+                        height="48"
+                        className="h-12 w-28 object-contain mb-1"
+                      >
+                        <image href="/Bar.svg" width="112" height="48" />
+                      </svg>
+                      <span className="text-xs font-medium">
+                        {drawingMode ? "Stop Drawing" : "Draw Bar"}
+                      </span>
+                    </div>
+                    {/* Circle SVG as button */}
+                    <div
+                      className="w-1/2 flex flex-col items-center cursor-pointer"
+                      onClick={handleCircleDrawClick}
+                      title={
+                        circleDrawingMode
+                          ? "Stop Drawing Circle"
+                          : "Draw Circle"
+                      }
+                    >
+                      <svg
+                        width="48"
+                        height="48"
+                        className="h-12 w-12 object-contain mb-1"
+                      >
+                        <image href="/circle.svg" width="48" height="48" />
+                      </svg>
+                      <span className="text-xs font-medium">
+                        {circleDrawingMode ? "Stop Drawing" : "Draw Circle"}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -495,11 +442,21 @@ const AppSidebar = () => {
                         onDragStart={(e) => handleDragStart(e, tableType)}
                         className="cursor-move"
                       >
-                        <img
-                          src={tableType.svgPath}
-                          alt={tableType.name}
-                          className="w-22 h-22 object-contain mb-1"
-                        />
+                        {tableType.svgPath.endsWith('.svg') ? (
+                          <svg
+                            width="88"
+                            height="88"
+                            className="w-22 h-22 object-contain mb-1"
+                          >
+                            <image href={tableType.svgPath} width="88" height="88" />
+                          </svg>
+                        ) : (
+                          <img
+                            src={tableType.svgPath}
+                            alt={tableType.name}
+                            className="w-22 h-22 object-contain mb-1"
+                          />
+                        )}
                       </div>
                     ))}
                   </div>

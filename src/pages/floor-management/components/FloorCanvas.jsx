@@ -1,6 +1,15 @@
 import { useEffect, useState, useRef } from "react";
-import { Stage, Layer, Rect, Text, Group, Transformer } from "react-konva";
-import { useFloorManagement } from "../context/FloorManagementContext";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Text,
+  Group,
+  Transformer,
+  Circle,
+  Image,
+} from "react-konva";
+import { useFloorManagement } from "../hooks/use-Floor-Management";
 import TableComponent from "./TableComponent";
 import {
   Select,
@@ -10,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, X } from "lucide-react";
 import { toast } from "react-toastify";
 import { Dialog } from "@radix-ui/react-dialog";
 import {
@@ -19,89 +28,169 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Html } from "react-konva-utils";
+import { tableStatuses } from "../constants";
+import { checkOverlap } from "../lib/utils";
 
 const FloorCanvas = () => {
+  const doorImage = "/Door.svg";
+  const plantImage = "/Plant.png";
+
   const {
-    tables,
-    tableStatuses,
+    elements,
+    setElements,
     selectedId,
     stageRef,
     dragUrl,
     userRole,
-    sidebarVisible,
     drawingMode,
-    drawnRectangles,
-    setDrawnRectangles,
+    circleDrawingMode,
     setSelectedId,
     addElement,
-    addDrawnRectangle,
-    setTables,
     barCreated,
     setBarCreated,
     barName,
     setBarName,
     updateTablePosition,
     transferReservation,
-    updateBarDimensions, // Add this to context
+    setSidebarVisible,
+    setDrawingMode,
+    setCircleDrawingMode,
   } = useFloorManagement();
+
+  // Local state for circle dialog if not provided by hook
+  const [localCircleCreated, setLocalCircleCreated] = useState(false);
+  const [localCircleName, setLocalCircleName] = useState("");
+
+  // Use hook values if available, otherwise use local state
+  const circleCreated = localCircleCreated;
+  const setCircleCreated = setLocalCircleCreated;
+  const circleName = localCircleName;
+  const setCircleName = setLocalCircleName;
 
   // Add transformer ref
   const transformerRef = useRef();
   const selectedBarRef = useRef();
+  const selectedCircleRef = useRef();
+  const selectedDoorRef = useRef();
+  const selectedPlantRef = useRef();
 
-  // Responsive stage size state
   const [stageSize, setStageSize] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
   });
 
-  // State for selected floor
   const [selectedFloor, setSelectedFloor] = useState("floor-1");
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState(null);
   const [currentRect, setCurrentRect] = useState(null);
+  const [currentCircle, setCurrentCircle] = useState(null);
 
-  // Reservation drag state
   const [draggedReservation, setDraggedReservation] = useState(null);
+
+  // Load images
+  const [doorImg, setDoorImg] = useState(null);
+  const [plantImg, setPlantImg] = useState(null);
+
+  useEffect(() => {
+    const loadImages = () => {
+      const door = new window.Image();
+      door.src = doorImage;
+      door.onload = () => {
+        console.log("Door image loaded successfully");
+        setDoorImg(door);
+      };
+      door.onerror = () => {
+        console.error("Failed to load door image:", doorImage);
+      };
+
+      const plant = new window.Image();
+      plant.src = plantImage;
+      plant.onload = () => {
+        console.log("Plant image loaded successfully");
+        setPlantImg(plant);
+      };
+      plant.onerror = () => {
+        console.error("Failed to load plant image:", plantImage);
+      };
+    };
+
+    loadImages();
+  }, []);
+
+  // Only show elements for the selected floor
+  const bars = elements.filter(
+    (element) => element.type === "bar" && element.floorId === selectedFloor
+  );
+  const circles = elements.filter(
+    (element) => element.type === "circle" && element.floorId === selectedFloor
+  );
+  const tables = elements.filter(
+    (element) => element.type === "table" && element.floorId === selectedFloor
+  );
+  const doors = elements.filter(
+    (element) => element.type === "door" && element.floorId === selectedFloor
+  );
+  const plants = elements.filter(
+    (element) => element.type === "plant" && element.floorId === selectedFloor
+  );
 
   // Update transformer when selection changes
   useEffect(() => {
-    if (selectedId && transformerRef.current && selectedBarRef.current) {
-      // Check if selected item is a bar
-      const selectedBar = drawnRectangles.find((bar) => bar.id === selectedId);
-      if (selectedBar && userRole === "admin") {
+    if (selectedId && transformerRef.current) {
+      const selectedBar = bars.find((bar) => bar.id === selectedId);
+      const selectedCircle = circles.find((circle) => circle.id === selectedId);
+      const selectedDoor = doors.find((door) => door.id === selectedId);
+      const selectedPlant = plants.find((plant) => plant.id === selectedId);
+
+      if (selectedBar && userRole === "admin" && selectedBarRef.current) {
         transformerRef.current.nodes([selectedBarRef.current]);
+        transformerRef.current.getLayer().batchDraw();
+      } else if (
+        selectedCircle &&
+        userRole === "admin" &&
+        selectedCircleRef.current
+      ) {
+        transformerRef.current.nodes([selectedCircleRef.current]);
+        transformerRef.current.getLayer().batchDraw();
+      } else if (
+        selectedDoor &&
+        userRole === "admin" &&
+        selectedDoorRef.current
+      ) {
+        transformerRef.current.nodes([selectedDoorRef.current]);
+        transformerRef.current.getLayer().batchDraw();
+      } else if (
+        selectedPlant &&
+        userRole === "admin" &&
+        selectedPlantRef.current
+      ) {
+        transformerRef.current.nodes([selectedPlantRef.current]);
         transformerRef.current.getLayer().batchDraw();
       }
     } else if (transformerRef.current) {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer().batchDraw();
     }
-  }, [selectedId, drawnRectangles, userRole]);
+  }, [selectedId, bars, circles, doors, plants, userRole]);
 
   // Update stage size on window resize and sidebar toggle
   useEffect(() => {
     const updateSize = () => {
-      // Calculate available width considering sidebar
-      const availableWidth = sidebarVisible
-        ? window.innerWidth - 384 // 384px = w-96 (24rem)
-        : window.innerWidth;
-
       setStageSize({
-        width: Math.max(availableWidth, 400), // Minimum width
+        width: window.innerWidth,
         height: window.innerHeight,
       });
+      setSidebarVisible(false);
     };
 
-    updateSize(); // Initial call
+    updateSize();
     window.addEventListener("resize", updateSize);
-
     return () => window.removeEventListener("resize", updateSize);
-  }, [sidebarVisible]);
+  }, []);
 
-  // Handle drag over stage
   const handleDragOver = (e) => {
     e.preventDefault();
   };
@@ -127,7 +216,16 @@ const FloorCanvas = () => {
     // Handle table/element drop
     if (!dragUrl.current || userRole !== "admin") return;
 
-    addElement(dragUrl.current, position);
+    // Check what type of element is being dropped
+    if (dragUrl.current === "door") {
+      addDoorElement(position);
+    } else if (dragUrl.current === "plant") {
+      addPlantElement(position);
+    } else {
+      // Default case (tables, bars, etc.)
+      addElementWithFloor(dragUrl.current, position);
+    }
+
     dragUrl.current = null;
   };
 
@@ -135,22 +233,20 @@ const FloorCanvas = () => {
   const handleReservationDropOnStage = (dropPosition) => {
     if (!draggedReservation) return;
 
-    // Find table at drop position
-    const targetTable = tables.find((table) => {
-      if (table.type !== "table") return false;
-
-      return (
+    const targetTable = tables.find(
+      (table) =>
         dropPosition.x >= table.x &&
         dropPosition.x <= table.x + table.width &&
         dropPosition.y >= table.y &&
         dropPosition.y <= table.y + table.height
-      );
-    });
+    );
 
     if (!targetTable) return;
 
     if (targetTable.id === draggedReservation.id) {
-      toast.info("Drop reservation on an available table to transfer");
+      toast.info(
+        `Drop reservation on an available table-${targetTable.tableNumber} to transfer`
+      );
       return;
     }
 
@@ -167,88 +263,226 @@ const FloorCanvas = () => {
     setDraggedReservation(null);
   };
 
+  // Utility function to check circle overlap
+  const checkCircleOverlap = (circle1, circle2) => {
+    const dx = circle1.x - circle2.x;
+    const dy = circle1.y - circle2.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    return distance < circle1.radius + circle2.radius;
+  };
+
+  // Modified addElement function to handle circles, with floorId
+  const addCircleElement = (circleData, position) => {
+    const newCircle = {
+      id: `circle-${Date.now()}`,
+      type: "circle",
+      x: position.x,
+      y: position.y,
+      radius: circleData.radius,
+      text: "",
+      floorId: selectedFloor,
+    };
+    setElements((prev) => [...prev, newCircle]);
+    setCircleCreated(true);
+    // Exit drawing mode after creating circle
+    if (setCircleDrawingMode) {
+      setCircleDrawingMode(false);
+    }
+  };
+
+  // Patch addElement to always add floorId for new elements
+  const addElementWithFloor = (element, position) => {
+    const newElement = {
+      ...element,
+      x: position.x,
+      y: position.y,
+      floorId: selectedFloor,
+    };
+
+    // Set default dimensions based on type if not provided
+    if (element.type === "door" && !element.width) {
+      newElement.width = 80;
+      newElement.height = 20;
+    }
+    if (element.type === "plant" && !element.width) {
+      newElement.width = 60;
+      newElement.height = 60;
+    }
+
+    setElements((prev) => [...prev, newElement]);
+
+    // For doors and plants, we don't need a name dialog
+    if (element.type === "bar") {
+      setBarCreated(true);
+      // Exit drawing mode after creating bar
+      if (setDrawingMode) {
+        setDrawingMode(false);
+      }
+    } else if (element.type === "circle") {
+      setCircleCreated(true);
+      // Exit drawing mode after creating circle
+      if (setCircleDrawingMode) {
+        setCircleDrawingMode(false);
+      }
+    }
+  };
+
+  // Add door element
+  const addDoorElement = (position) => {
+    addElementWithFloor(
+      {
+        id: `door-${Date.now()}`,
+        type: "door",
+        width: 80,
+        height: 20,
+        rotation: 0,
+      },
+      position
+    );
+  };
+
+  // Add plant element
+  const addPlantElement = (position) => {
+    addElementWithFloor(
+      {
+        id: `plant-${Date.now()}`,
+        type: "plant",
+        width: 60,
+        height: 60,
+      },
+      position
+    );
+  };
+
   // Handle drawing mode mouse events
   const handleStageMouseDown = (e) => {
-    if (!drawingMode || userRole !== "admin") return;
+    if ((!drawingMode && !circleDrawingMode) || userRole !== "admin") return;
 
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
 
-    // Check if pointer overlaps with any existing rectangles
-    const hasOverlap = drawnRectangles.some((rect) => {
-      return (
-        pointer.x >= rect.x &&
-        pointer.x <= rect.x + rect.width &&
-        pointer.y >= rect.y &&
-        pointer.y <= rect.y + rect.height
+    if (drawingMode) {
+      const hasOverlap = bars.some(
+        (rect) =>
+          pointer.x >= rect.x &&
+          pointer.x <= rect.x + rect.width &&
+          pointer.y >= rect.y &&
+          pointer.y <= rect.y + rect.height
       );
-    });
 
-    if (hasOverlap) {
-      toast.error("Cannot draw over existing Bars");
-      return;
+      if (hasOverlap) {
+        toast.error("Cannot draw over existing bars");
+        return;
+      }
+
+      setIsDrawing(true);
+      setDrawStart(pointer);
+      setCurrentRect({
+        x: pointer.x,
+        y: pointer.y,
+        width: 0,
+        height: 0,
+        type: "bar",
+      });
+    } else if (circleDrawingMode) {
+      const hasOverlap = circles.some((circle) => {
+        const dx = pointer.x - circle.x;
+        const dy = pointer.y - circle.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < circle.radius;
+      });
+
+      if (hasOverlap) {
+        toast.error("Cannot draw over existing circles");
+        return;
+      }
+
+      setIsDrawing(true);
+      setDrawStart(pointer);
+      setCurrentCircle({
+        x: pointer.x,
+        y: pointer.y,
+        radius: 0,
+        type: "circle",
+      });
     }
-
-    setIsDrawing(true);
-    setDrawStart(pointer);
-    setCurrentRect({
-      x: pointer.x,
-      y: pointer.y,
-      width: 0,
-      height: 0,
-    });
   };
 
   const handleStageMouseMove = (e) => {
-    if (!isDrawing || !drawStart || !drawingMode) return;
+    if (!isDrawing || !drawStart || (!drawingMode && !circleDrawingMode))
+      return;
 
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
 
-    // Check if current drawing overlaps with any existing rectangles
-    const tempRect = {
-      x: Math.min(drawStart.x, pointer.x),
-      y: Math.min(drawStart.y, pointer.y),
-      width: Math.abs(pointer.x - drawStart.x),
-      height: Math.abs(pointer.y - drawStart.y),
-    };
+    if (drawingMode) {
+      const tempRect = {
+        x: Math.min(drawStart.x, pointer.x),
+        y: Math.min(drawStart.y, pointer.y),
+        width: Math.abs(pointer.x - drawStart.x),
+        height: Math.abs(pointer.y - drawStart.y),
+      };
 
-    const hasOverlap = drawnRectangles.some((rect) =>
-      checkOverlap(tempRect, rect)
-    );
+      const hasOverlap = bars.some((rect) => checkOverlap(tempRect, rect));
+      if (hasOverlap) {
+        setIsDrawing(false);
+        setDrawStart(null);
+        setCurrentRect(null);
+        toast.warn("Cannot draw over existing rectangles");
+        return;
+      }
+      setCurrentRect({ ...tempRect, type: "bar" });
+    } else if (circleDrawingMode) {
+      const dx = pointer.x - drawStart.x;
+      const dy = pointer.y - drawStart.y;
+      const radius = Math.sqrt(dx * dx + dy * dy);
 
-    if (hasOverlap) {
-      setIsDrawing(false);
-      setDrawStart(null);
-      setCurrentRect(null);
-      toast.warn("Cannot draw over existing rectangles");
-      return;
+      const tempCircle = {
+        x: drawStart.x,
+        y: drawStart.y,
+        radius: radius,
+      };
+
+      const hasOverlap = circles.some((circle) =>
+        checkCircleOverlap(tempCircle, circle)
+      );
+      if (hasOverlap) {
+        setIsDrawing(false);
+        setDrawStart(null);
+        setCurrentCircle(null);
+        toast.warn("Cannot draw over existing circles");
+        return;
+      }
+      setCurrentCircle({ ...tempCircle, type: "circle" });
     }
-
-    setCurrentRect(tempRect);
   };
 
   const handleStageMouseUp = () => {
-    if (!isDrawing || !currentRect || !drawingMode) return;
+    if (!isDrawing || (!drawingMode && !circleDrawingMode)) return;
 
-    // Only add rectangle if it has meaningful size
-    if (currentRect.width > 10 && currentRect.height > 10) {
-      addDrawnRectangle(currentRect);
+    if (
+      drawingMode &&
+      currentRect &&
+      currentRect.width > 10 &&
+      currentRect.height > 10
+    ) {
+      addElementWithFloor(currentRect, { x: currentRect.x, y: currentRect.y });
+    } else if (
+      circleDrawingMode &&
+      currentCircle &&
+      currentCircle.radius > 10
+    ) {
+      console.log("Adding circle with radius:", currentCircle.radius);
+      addCircleElement(currentCircle, {
+        x: currentCircle.x,
+        y: currentCircle.y,
+      });
     }
 
     setIsDrawing(false);
     setDrawStart(null);
     setCurrentRect(null);
-  };
-
-  // Helper function to check if two rectangles overlap
-  const checkOverlap = (rect1, rect2) => {
-    return !(
-      rect1.x + rect1.width < rect2.x ||
-      rect2.x + rect2.width < rect1.x ||
-      rect1.y + rect1.height < rect2.y ||
-      rect2.y + rect2.height < rect1.y
-    );
+    setCurrentCircle(null);
   };
 
   // Handle reservation Pin drag
@@ -261,7 +495,6 @@ const FloorCanvas = () => {
     let overlappingTable = null;
     let canSwap = true;
 
-    // Create a rectangle for the dragged position
     const draggedRect = {
       x: x,
       y: y,
@@ -269,7 +502,6 @@ const FloorCanvas = () => {
       height: originalTable.height || 80,
     };
 
-    // Find overlapping table using proper collision detection
     for (const table of tables) {
       if (table.id === tableId || table.type !== "table") continue;
 
@@ -280,9 +512,7 @@ const FloorCanvas = () => {
         height: table.height || 80,
       };
 
-      // Check if rectangles overlap
       if (checkOverlap(draggedRect, tableRect)) {
-        // Check if the overlapping table can be swapped
         if (table.status === "reserved") {
           toast.error("The table is already reserved.");
           canSwap = false;
@@ -298,26 +528,26 @@ const FloorCanvas = () => {
       }
     }
 
-    // If no valid overlap found or swap not allowed, return false
     if (!canSwap || !overlappingTable) {
       return false;
     }
 
-    // Perform the swap
-    setTables(
-      tables.map((t) => {
-        if (t.id === overlappingTable.id) {
+    setElements(
+      elements.map((element) => {
+        if (element.type !== "table") return element;
+
+        if (element.id === overlappingTable.id) {
           return {
-            ...t,
+            ...element,
             status: originalTable.status,
             color: originalTable.color,
             reservationName: originalTable.reservationName,
             reservationTime: originalTable.reservationTime,
           };
         }
-        if (t.id === originalTable.id) {
+        if (element.id === originalTable.id) {
           return {
-            ...t,
+            ...element,
             status: "available",
             reservationName: "",
             reservationTime: null,
@@ -326,7 +556,7 @@ const FloorCanvas = () => {
                 ?.color || "#10b981",
           };
         }
-        return t;
+        return element;
       })
     );
 
@@ -335,7 +565,6 @@ const FloorCanvas = () => {
 
   // Handle table drag on stage with overlap prevention
   const handleTableDragEnd = (e, tableId) => {
-    // Only admin can move tables
     if (userRole !== "admin") return;
 
     const newPosition = {
@@ -346,7 +575,6 @@ const FloorCanvas = () => {
     const draggedTable = tables.find((table) => table.id === tableId);
     if (!draggedTable) return;
 
-    // Check for overlaps with other tables
     const draggedRect = {
       x: newPosition.x,
       y: newPosition.y,
@@ -354,21 +582,25 @@ const FloorCanvas = () => {
       height: draggedTable.height || 80,
     };
 
-    // Check if the new position overlaps with any other table
-    const hasOverlap = tables.some((table) => {
-      if (table.id === tableId) return false;
+    const hasOverlap = [
+      ...tables,
+      ...bars,
+      ...circles,
+      ...doors,
+      ...plants,
+    ].some((element) => {
+      if (element.id === tableId) return false;
 
-      const tableRect = {
-        x: table.x,
-        y: table.y,
-        width: table.width || 80,
-        height: table.height || 80,
+      const elementRect = {
+        x: element.x,
+        y: element.y,
+        width: element.width || 80,
+        height: element.height || 80,
       };
 
-      return checkOverlap(draggedRect, tableRect);
+      return checkOverlap(draggedRect, elementRect);
     });
 
-    // Check if the table is within stage boundaries
     const isWithinBounds =
       newPosition.x >= 0 &&
       newPosition.y >= 0 &&
@@ -376,8 +608,7 @@ const FloorCanvas = () => {
       newPosition.y + draggedRect.height <= stageSize.height;
 
     if (hasOverlap) {
-      toast.warn("Cannot place table here - it overlaps with another table.");
-      // Reset to original position
+      toast.warn("Cannot place table here - it overlaps with another element.");
       e.target.x(draggedTable.x);
       e.target.y(draggedTable.y);
       return;
@@ -385,172 +616,561 @@ const FloorCanvas = () => {
 
     if (!isWithinBounds) {
       toast.error("Cannot place table outside the floor area.");
-      // Reset to original position
       e.target.x(draggedTable.x);
       e.target.y(draggedTable.y);
       return;
     }
 
-    // Update position if no overlaps
     updateTablePosition(tableId, newPosition);
   };
 
+  // Bar drag end (update elements)
   const handleBarDragEnd = (e, barId) => {
     if (userRole !== "admin") return;
-
     const newPosition = {
       x: e.target.x(),
       y: e.target.y(),
     };
-
-    // Find the dragged rectangle
-    const draggedBar = drawnRectangles.find((bar) => bar.id === barId);
+    const draggedBar = bars.find((bar) => bar.id === barId);
     if (!draggedBar) return;
-
     const width = draggedBar.width || 80;
     const height = draggedBar.height || 90;
-
     const draggedRect = {
       x: newPosition.x,
       y: newPosition.y,
       width,
       height,
     };
-
-    // Check overlap with other rectangles
-    const hasOverlap = drawnRectangles.some((bar) => {
-      if (bar.id === barId) return false;
-
-      const barRect = {
-        x: bar.x,
-        y: bar.y,
-        width: bar.width || 80,
-        height: bar.height || 90,
+    const hasOverlap = [
+      ...bars,
+      ...tables,
+      ...circles,
+      ...doors,
+      ...plants,
+    ].some((element) => {
+      if (element.id === barId) return false;
+      const elementRect = {
+        x: element.x,
+        y: element.y,
+        width: element.width || 80,
+        height: element.height || 90,
       };
-
-      return checkOverlap(draggedRect, barRect);
+      return checkOverlap(draggedRect, elementRect);
     });
-
-    // Check if within stage bounds
     const isWithinBounds =
       newPosition.x >= 0 &&
       newPosition.y >= 0 &&
       newPosition.x + width <= stageSize.width - 270 &&
       newPosition.y + height <= stageSize.height;
-
-    // Handle overlap case - reset to original position
     if (hasOverlap) {
-      toast.warn("Cannot place bar here - it overlaps with another bar.");
-      // Force the visual element back to original position
+      toast.warn("Cannot place bar here - it overlaps with another element.");
       e.target.x(draggedBar.x);
       e.target.y(draggedBar.y);
-      // Force stage redraw
       e.target.getStage().batchDraw();
       return;
     }
-
-    // Handle out-of-bounds case - reset to original position
     if (!isWithinBounds) {
       toast.error("Cannot place bar outside the floor area.");
-      // Force the visual element back to original position
       e.target.x(draggedBar.x);
       e.target.y(draggedBar.y);
-      // Force stage redraw
       e.target.getStage().batchDraw();
       return;
     }
-
-    // Update the bar position in drawnRectangles state
-    setDrawnRectangles((prev) =>
+    setElements((prev) =>
       prev.map((bar) =>
         bar.id === barId ? { ...bar, x: newPosition.x, y: newPosition.y } : bar
       )
     );
   };
 
-  // Handle transformer transform end (for resizing)
-  const handleTransformEnd = (e) => {
-    const node = e.target;
-    const scaleX = node.scaleX();
-    const scaleY = node.scaleY();
+  // Circle drag end (update elements)
+  const handleCircleDragEnd = (e, circleId) => {
+    if (userRole !== "admin") return;
+    const newPosition = {
+      x: e.target.x(),
+      y: e.target.y(),
+    };
+    const draggedCircle = circles.find((circle) => circle.id === circleId);
+    if (!draggedCircle) return;
+    const radius = draggedCircle.radius || 40;
+    const draggedCircleData = {
+      x: newPosition.x,
+      y: newPosition.y,
+      radius,
+    };
+    const hasOverlap = [
+      ...circles,
+      ...tables,
+      ...bars,
+      ...doors,
+      ...plants,
+    ].some((element) => {
+      if (element.id === circleId) return false;
+      if (element.type === "circle") {
+        return checkCircleOverlap(draggedCircleData, element);
+      } else {
+        // Check overlap with other element types using bounding boxes
+        const elementRect = {
+          x: element.x,
+          y: element.y,
+          width: element.width || 80,
+          height: element.height || 80,
+        };
+        const circleRect = {
+          x: newPosition.x - radius,
+          y: newPosition.y - radius,
+          width: radius * 2,
+          height: radius * 2,
+        };
+        return checkOverlap(circleRect, elementRect);
+      }
+    });
+    const isWithinBounds =
+      newPosition.x - radius >= 0 &&
+      newPosition.y - radius >= 0 &&
+      newPosition.x + radius <= stageSize.width - 270 &&
+      newPosition.y + radius <= stageSize.height;
+    if (hasOverlap) {
+      toast.warn(
+        "Cannot place circle here - it overlaps with another element."
+      );
+      e.target.x(draggedCircle.x);
+      e.target.y(draggedCircle.y);
+      e.target.getStage().batchDraw();
+      return;
+    }
+    if (!isWithinBounds) {
+      toast.error("Cannot place circle outside the floor area.");
+      e.target.x(draggedCircle.x);
+      e.target.y(draggedCircle.y);
+      e.target.getStage().batchDraw();
+      return;
+    }
+    setElements((prev) =>
+      prev.map((circle) =>
+        circle.id === circleId
+          ? { ...circle, x: newPosition.x, y: newPosition.y }
+          : circle
+      )
+    );
+  };
 
-    // Get the selected bar
-    const selectedBar = drawnRectangles.find((bar) => bar.id === selectedId);
-    if (!selectedBar) return;
+  // Handle door drag end
+  const handleDoorDragEnd = (e, doorId) => {
+    if (userRole !== "admin") return;
+    const newPosition = {
+      x: e.target.x(),
+      y: e.target.y(),
+    };
+    const draggedDoor = doors.find((door) => door.id === doorId);
+    if (!draggedDoor) return;
 
-    // Calculate new dimensions
-    const newWidth = Math.max(50, selectedBar.width * scaleX); // Minimum width of 50
-    const newHeight = Math.max(30, selectedBar.height * scaleY); // Minimum height of 30
-
-    // Get current position (might have changed during transform)
-    const newX = node.x();
-    const newY = node.y();
-
-    // Reset scale to 1 (we'll update the actual dimensions)
-    node.scaleX(1);
-    node.scaleY(1);
-
-    // Check for overlaps with new dimensions
-    const transformedRect = {
-      x: newX,
-      y: newY,
-      width: newWidth,
-      height: newHeight,
+    const draggedRect = {
+      x: newPosition.x,
+      y: newPosition.y,
+      width: draggedDoor.width,
+      height: draggedDoor.height,
     };
 
-    // Check overlap with other bars
-    const hasOverlap = drawnRectangles.some((bar) => {
-      if (bar.id === selectedId) return false;
+    // Check overlap with other elements
+    const hasOverlap = [
+      ...bars,
+      ...circles,
+      ...tables,
+      ...plants,
+      ...doors,
+    ].some((element) => {
+      if (element.id === doorId) return false;
 
-      const barRect = {
-        x: bar.x,
-        y: bar.y,
-        width: bar.width,
-        height: bar.height,
+      const elementRect = {
+        x: element.x,
+        y: element.y,
+        width: element.width || 0,
+        height: element.height || 0,
       };
 
-      return checkOverlap(transformedRect, barRect);
+      return checkOverlap(draggedRect, elementRect);
     });
 
-    // Check if within stage bounds
     const isWithinBounds =
-      newX >= 0 &&
-      newY >= 0 &&
-      newX + newWidth <= stageSize.width - 270 &&
-      newY + newHeight <= stageSize.height;
+      newPosition.x >= 0 &&
+      newPosition.y >= 0 &&
+      newPosition.x + draggedDoor.width <= stageSize.width - 270 &&
+      newPosition.y + draggedDoor.height <= stageSize.height;
 
     if (hasOverlap) {
-      toast.warn("Cannot resize bar - it would overlap with another bar.");
-      // Reset to original dimensions and position
-      node.x(selectedBar.x);
-      node.y(selectedBar.y);
-      node.getStage().batchDraw();
+      toast.warn("Cannot place door here - it overlaps with another element.");
+      e.target.x(draggedDoor.x);
+      e.target.y(draggedDoor.y);
       return;
     }
 
     if (!isWithinBounds) {
-      toast.error("Cannot resize bar - it would go outside the floor area.");
-      // Reset to original dimensions and position
-      node.x(selectedBar.x);
-      node.y(selectedBar.y);
-      node.getStage().batchDraw();
+      toast.error("Cannot place door outside the floor area.");
+      e.target.x(draggedDoor.x);
+      e.target.y(draggedDoor.y);
       return;
     }
 
-    // Update the bar dimensions and position in state
-    setDrawnRectangles((prev) =>
-      prev.map((bar) =>
-        bar.id === selectedId
-          ? {
-              ...bar,
-              x: newX,
-              y: newY,
-              width: newWidth,
-              height: newHeight,
-            }
-          : bar
+    setElements((prev) =>
+      prev.map((door) =>
+        door.id === doorId
+          ? { ...door, x: newPosition.x, y: newPosition.y }
+          : door
       )
     );
+  };
+
+  // Handle plant drag end
+  const handlePlantDragEnd = (e, plantId) => {
+    if (userRole !== "admin") return;
+    const newPosition = {
+      x: e.target.x(),
+      y: e.target.y(),
+    };
+    const draggedPlant = plants.find((plant) => plant.id === plantId);
+    if (!draggedPlant) return;
+
+    const draggedRect = {
+      x: newPosition.x,
+      y: newPosition.y,
+      width: draggedPlant.width,
+      height: draggedPlant.height,
+    };
+
+    // Check overlap with other elements
+    const hasOverlap = [
+      ...bars,
+      ...circles,
+      ...tables,
+      ...doors,
+      ...plants,
+    ].some((element) => {
+      if (element.id === plantId) return false;
+
+      const elementRect = {
+        x: element.x,
+        y: element.y,
+        width: element.width || 0,
+        height: element.height || 0,
+      };
+
+      return checkOverlap(draggedRect, elementRect);
+    });
+
+    const isWithinBounds =
+      newPosition.x >= 0 &&
+      newPosition.y >= 0 &&
+      newPosition.x + draggedPlant.width <= stageSize.width - 270 &&
+      newPosition.y + draggedPlant.height <= stageSize.height;
+
+    if (hasOverlap) {
+      toast.warn("Cannot place plant here - it overlaps with another element.");
+      e.target.x(draggedPlant.x);
+      e.target.y(draggedPlant.y);
+      return;
+    }
+
+    if (!isWithinBounds) {
+      toast.error("Cannot place plant outside the floor area.");
+      e.target.x(draggedPlant.x);
+      e.target.y(draggedPlant.y);
+      return;
+    }
+
+    setElements((prev) =>
+      prev.map((plant) =>
+        plant.id === plantId
+          ? { ...plant, x: newPosition.x, y: newPosition.y }
+          : plant
+      )
+    );
+  };
+
+  // Fixed delete function to only delete specific element
+  const deleteElement = (elementId) => {
+    setElements((prev) => prev.filter((element) => element.id !== elementId));
+    setSelectedId(null);
+  };
+
+  // Transformer for resizing bars and circles (update elements)
+  const handleTransformEnd = (e) => {
+    const node = e.target;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    const selectedBar = bars.find((bar) => bar.id === selectedId);
+    const selectedCircle = circles.find((circle) => circle.id === selectedId);
+    const selectedDoor = doors.find((door) => door.id === selectedId);
+    const selectedPlant = plants.find((plant) => plant.id === selectedId);
+
+    if (selectedBar) {
+      const newWidth = Math.max(50, selectedBar.width * scaleX);
+      const newHeight = Math.max(30, selectedBar.height * scaleY);
+      const newX = node.x();
+      const newY = node.y();
+      node.scaleX(1);
+      node.scaleY(1);
+      const transformedRect = {
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight,
+      };
+      const hasOverlap = [
+        ...bars,
+        ...tables,
+        ...circles,
+        ...doors,
+        ...plants,
+      ].some((element) => {
+        if (element.id === selectedId) return false;
+        const elementRect = {
+          x: element.x,
+          y: element.y,
+          width: element.width,
+          height: element.height,
+        };
+        return checkOverlap(transformedRect, elementRect);
+      });
+      const isWithinBounds =
+        newX >= 0 &&
+        newY >= 0 &&
+        newX + newWidth <= stageSize.width - 270 &&
+        newY + newHeight <= stageSize.height;
+      if (hasOverlap) {
+        toast.warn(
+          "Cannot resize bar - it would overlap with another element."
+        );
+        node.x(selectedBar.x);
+        node.y(selectedBar.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      if (!isWithinBounds) {
+        toast.error("Cannot resize bar - it would go outside the floor area.");
+        node.x(selectedBar.x);
+        node.y(selectedBar.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      setElements((prev) =>
+        prev.map((bar) =>
+          bar.id === selectedId
+            ? {
+                ...bar,
+                x: newX,
+                y: newY,
+                width: newWidth,
+                height: newHeight,
+              }
+            : bar
+        )
+      );
+    } else if (selectedCircle) {
+      const newRadius = Math.max(
+        20,
+        selectedCircle.radius * Math.max(scaleX, scaleY)
+      );
+      const newX = node.x();
+      const newY = node.y();
+      node.scaleX(1);
+      node.scaleY(1);
+      const transformedCircle = {
+        x: newX,
+        y: newY,
+        radius: newRadius,
+      };
+      const hasOverlap = [
+        ...circles,
+        ...tables,
+        ...bars,
+        ...doors,
+        ...plants,
+      ].some((element) => {
+        if (element.id === selectedId) return false;
+        if (element.type === "circle") {
+          return checkCircleOverlap(transformedCircle, element);
+        } else {
+          // Check overlap with other element types using bounding boxes
+          const elementRect = {
+            x: element.x,
+            y: element.y,
+            width: element.width || 80,
+            height: element.height || 80,
+          };
+          const circleRect = {
+            x: newX - newRadius,
+            y: newY - newRadius,
+            width: newRadius * 2,
+            height: newRadius * 2,
+          };
+          return checkOverlap(circleRect, elementRect);
+        }
+      });
+      const isWithinBounds =
+        newX - newRadius >= 0 &&
+        newY - newRadius >= 0 &&
+        newX + newRadius <= stageSize.width - 270 &&
+        newY + newRadius <= stageSize.height;
+      if (hasOverlap) {
+        toast.warn(
+          "Cannot resize circle - it would overlap with another element."
+        );
+        node.x(selectedCircle.x);
+        node.y(selectedCircle.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      if (!isWithinBounds) {
+        toast.error(
+          "Cannot resize circle - it would go outside the floor area."
+        );
+        node.x(selectedCircle.x);
+        node.y(selectedCircle.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      setElements((prev) =>
+        prev.map((circle) =>
+          circle.id === selectedId
+            ? {
+                ...circle,
+                x: newX,
+                y: newY,
+                radius: newRadius,
+              }
+            : circle
+        )
+      );
+    } else if (selectedDoor) {
+      const newWidth = Math.max(30, selectedDoor.width * scaleX);
+      const newHeight = Math.max(10, selectedDoor.height * scaleY);
+      const newX = node.x();
+      const newY = node.y();
+      node.scaleX(1);
+      node.scaleY(1);
+      const transformedRect = {
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight,
+      };
+      const hasOverlap = [
+        ...bars,
+        ...tables,
+        ...circles,
+        ...doors,
+        ...plants,
+      ].some((element) => {
+        if (element.id === selectedId) return false;
+        const elementRect = {
+          x: element.x,
+          y: element.y,
+          width: element.width,
+          height: element.height,
+        };
+        return checkOverlap(transformedRect, elementRect);
+      });
+      const isWithinBounds =
+        newX >= 0 &&
+        newY >= 0 &&
+        newX + newWidth <= stageSize.width - 270 &&
+        newY + newHeight <= stageSize.height;
+      if (hasOverlap) {
+        toast.warn(
+          "Cannot resize door - it would overlap with another element."
+        );
+        node.x(selectedDoor.x);
+        node.y(selectedDoor.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      if (!isWithinBounds) {
+        toast.error("Cannot resize door - it would go outside the floor area.");
+        node.x(selectedDoor.x);
+        node.y(selectedDoor.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      setElements((prev) =>
+        prev.map((door) =>
+          door.id === selectedId
+            ? {
+                ...door,
+                x: newX,
+                y: newY,
+                width: newWidth,
+                height: newHeight,
+              }
+            : door
+        )
+      );
+    } else if (selectedPlant) {
+      const newWidth = Math.max(30, selectedPlant.width * scaleX);
+      const newHeight = Math.max(30, selectedPlant.height * scaleY);
+      const newX = node.x();
+      const newY = node.y();
+      node.scaleX(1);
+      node.scaleY(1);
+      const transformedRect = {
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight,
+      };
+      const hasOverlap = [
+        ...bars,
+        ...tables,
+        ...circles,
+        ...doors,
+        ...plants,
+      ].some((element) => {
+        if (element.id === selectedId) return false;
+        const elementRect = {
+          x: element.x,
+          y: element.y,
+          width: element.width,
+          height: element.height,
+        };
+        return checkOverlap(transformedRect, elementRect);
+      });
+      const isWithinBounds =
+        newX >= 0 &&
+        newY >= 0 &&
+        newX + newWidth <= stageSize.width - 270 &&
+        newY + newHeight <= stageSize.height;
+      if (hasOverlap) {
+        toast.warn(
+          "Cannot resize plant - it would overlap with another element."
+        );
+        node.x(selectedPlant.x);
+        node.y(selectedPlant.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      if (!isWithinBounds) {
+        toast.error(
+          "Cannot resize plant - it would go outside the floor area."
+        );
+        node.x(selectedPlant.x);
+        node.y(selectedPlant.y);
+        node.getStage().batchDraw();
+        return;
+      }
+      setElements((prev) =>
+        prev.map((plant) =>
+          plant.id === selectedId
+            ? {
+                ...plant,
+                x: newX,
+                y: newY,
+                width: newWidth,
+                height: newHeight,
+              }
+            : plant
+        )
+      );
+    }
   };
 
   // Expose drag functions to window for sidebar access
@@ -561,14 +1181,28 @@ const FloorCanvas = () => {
     };
   }, []);
 
+  // Console log elements with floor ID right above return
+  console.log("Elements with floor ID:", {
+    selectedFloor,
+    totalElements: elements.length,
+    elementsForCurrentFloor: {
+      bars: bars.length,
+      circles: circles.length,
+      tables: tables.length,
+      doors: doors.length,
+      plants: plants.length,
+    },
+    allElements: elements.map((el) => ({
+      id: el.id,
+      type: el.type,
+      floorId: el.floorId,
+    })),
+  });
+
   return (
-    <div
-      className={`flex h-screen relative transition-all duration-300 ${
-        sidebarVisible ? "mr-96" : "mr-0"
-      }`}
-    >
+    <div className={`flex h-screen relative`}>
       {/* Status filter dropdown */}
-      <div className="absolute top-4 left-4 z-10 space-y-2">
+      <div className="absolute top-4 left-18 z-10 space-y-2">
         {userRole === "admin" && (
           <div className="flex gap-2 items-center">
             <Select value={selectedFloor} onValueChange={setSelectedFloor}>
@@ -621,6 +1255,8 @@ const FloorCanvas = () => {
               onClick={() => {
                 setBarCreated(false);
                 setBarName("");
+                // Remove the last added bar if cancelled
+                setElements((prev) => prev.slice(0, -1));
               }}
             >
               Cancel
@@ -628,11 +1264,12 @@ const FloorCanvas = () => {
             <Button
               onClick={() => {
                 if (barName.trim()) {
-                  setDrawnRectangles((prevRectangles) =>
-                    prevRectangles.map((rect, index) =>
-                      index === prevRectangles.length - 1
-                        ? { ...rect, text: barName.trim() }
-                        : rect
+                  setElements((prevElements) =>
+                    prevElements.map((element, index) =>
+                      index === prevElements.length - 1 &&
+                      element.type === "bar"
+                        ? { ...element, text: barName.trim() }
+                        : element
                     )
                   );
                   setBarCreated(false);
@@ -648,9 +1285,59 @@ const FloorCanvas = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={circleCreated} onOpenChange={setCircleCreated}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-semibold">
+              Enter a name for the circle
+            </DialogTitle>
+          </DialogHeader>
+
+          <Input
+            value={circleName}
+            onChange={(e) => setCircleName(e.target.value)}
+            placeholder="Enter circle name"
+            aria-label="Circle name"
+          />
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCircleCreated(false);
+                setCircleName("");
+                // Remove the last added circle if cancelled
+                setElements((prev) => prev.slice(0, -1));
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (circleName.trim()) {
+                  setElements((prevElements) =>
+                    prevElements.map((element, index) =>
+                      index === prevElements.length - 1 &&
+                      element.type === "circle"
+                        ? { ...element, text: circleName.trim() }
+                        : element
+                    )
+                  );
+                  setCircleCreated(false);
+                  setCircleName("");
+                }
+              }}
+              disabled={!circleName.trim()}
+              aria-label="Submit circle name"
+            >
+              Submit
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Main Stage Area */}
       <div
-        className="flex-1 bg-white relative transition-all duration-300"
+        className="flex-1 bg-white relative"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
@@ -658,29 +1345,183 @@ const FloorCanvas = () => {
           width={stageSize.width}
           height={stageSize.height}
           ref={stageRef}
-          onMouseDown={drawingMode ? handleStageMouseDown : undefined}
-          onMouseMove={drawingMode ? handleStageMouseMove : undefined}
-          onMouseUp={drawingMode ? handleStageMouseUp : undefined}
+          onMouseDown={
+            drawingMode || circleDrawingMode ? handleStageMouseDown : undefined
+          }
+          onMouseMove={
+            drawingMode || circleDrawingMode ? handleStageMouseMove : undefined
+          }
+          onMouseUp={
+            drawingMode || circleDrawingMode ? handleStageMouseUp : undefined
+          }
           onClick={(e) => {
-            // Deselect when clicking empty area (only if not drawing)
-            if (!drawingMode && e.target === e.target.getStage()) {
+            if (
+              !drawingMode &&
+              !circleDrawingMode &&
+              e.target === e.target.getStage()
+            ) {
               setSelectedId(null);
             }
           }}
         >
           <Layer>
-            {/* Render drawn rectangles */}
-            {drawnRectangles.map((rect) => (
+            {/* Render doors */}
+            {doors.map((door) => (
+              <Group
+                key={door.id}
+                x={door.x}
+                y={door.y}
+                rotation={door.rotation || 0}
+                draggable={userRole === "admin" && selectedId !== door.id}
+                onClick={() => setSelectedId(door.id)}
+                onDragEnd={(e) => handleDoorDragEnd(e, door.id)}
+                ref={selectedId === door.id ? selectedDoorRef : null}
+                onTransform={handleTransformEnd}
+                className="relative"
+              >
+                {selectedId === door.id && (
+                  <Html>
+                    <Button
+                      className="rounded-full bg-destructive size-6 text-white cursor-pointer -translate-x-1/2"
+                      style={{
+                        position: "absolute",
+                        top: -12,
+                        right: -25,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteElement(door.id);
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </Html>
+                )}
+                {doorImg ? (
+                  <Image
+                    image={doorImg}
+                    width={door.width}
+                    height={door.height}
+                    stroke={selectedId === door.id ? "#2563eb" : "#4b5563"}
+                    strokeWidth={selectedId === door.id ? 3 : 2}
+                  />
+                ) : (
+                  <Rect
+                    width={door.width}
+                    height={door.height}
+                    fill="#8B4513"
+                    stroke={selectedId === door.id ? "#2563eb" : "#4b5563"}
+                    strokeWidth={selectedId === door.id ? 3 : 2}
+                  />
+                )}
+                <Text
+                  x={door.width / 2}
+                  y={door.height / 2}
+                  text="Door"
+                  fontSize={12}
+                  fill="#ffffff"
+                  align="center"
+                  verticalAlign="middle"
+                  offsetX={door.width / 4}
+                  offsetY={6}
+                />
+              </Group>
+            ))}
+
+            {/* Render plants */}
+            {plants.map((plant) => (
+              <Group
+                key={plant.id}
+                x={plant.x}
+                y={plant.y}
+                draggable={userRole === "admin" && selectedId !== plant.id}
+                onClick={() => setSelectedId(plant.id)}
+                onDragEnd={(e) => handlePlantDragEnd(e, plant.id)}
+                ref={selectedId === plant.id ? selectedPlantRef : null}
+                onTransform={handleTransformEnd}
+                className="relative"
+              >
+                {selectedId === plant.id && (
+                  <Html>
+                    <Button
+                      className="rounded-full bg-destructive size-6 text-white cursor-pointer -translate-x-1/2"
+                      style={{
+                        position: "absolute",
+                        top: -12,
+                        right: -25,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteElement(plant.id);
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </Html>
+                )}
+                {plantImg ? (
+                  <Image
+                    image={plantImg}
+                    width={plant.width}
+                    height={plant.height}
+                    stroke={selectedId === plant.id ? "#2563eb" : "#4b5563"}
+                    strokeWidth={selectedId === plant.id ? 3 : 2}
+                  />
+                ) : (
+                  <Circle
+                    x={plant.width / 2}
+                    y={plant.height / 2}
+                    radius={Math.min(plant.width, plant.height) / 2}
+                    fill="#22c55e"
+                    stroke={selectedId === plant.id ? "#2563eb" : "#4b5563"}
+                    strokeWidth={selectedId === plant.id ? 3 : 2}
+                  />
+                )}
+                <Text
+                  x={plant.width / 2}
+                  y={plant.height / 2}
+                  text="Plant"
+                  fontSize={12}
+                  fill="#ffffff"
+                  align="center"
+                  verticalAlign="middle"
+                  offsetX={plant.width / 4}
+                  offsetY={6}
+                />
+              </Group>
+            ))}
+
+            {/* Render drawn rectangles (bars) */}
+            {bars.map((rect) => (
               <Group
                 key={rect.id}
                 x={rect.x}
                 y={rect.y}
-                draggable={userRole === "admin" && selectedId !== rect.id} // Disable drag when selected for transform
+                draggable={userRole === "admin" && selectedId !== rect.id}
                 onClick={() => setSelectedId(rect.id)}
                 onDragEnd={(e) => handleBarDragEnd(e, rect.id)}
                 ref={selectedId === rect.id ? selectedBarRef : null}
-                onTransformEnd={handleTransformEnd}
+                onTransform={handleTransformEnd}
+                className="relative"
               >
+                {selectedId === rect.id && (
+                  <Html>
+                    <Button
+                      className="rounded-full bg-destructive size-6 text-white cursor-pointer -translate-x-1/2"
+                      style={{
+                        position: "absolute",
+                        top: -12,
+                        right: -25,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteElement(rect.id);
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </Html>
+                )}
                 <Rect
                   width={rect.width}
                   height={rect.height}
@@ -704,13 +1545,77 @@ const FloorCanvas = () => {
               </Group>
             ))}
 
+            {/* Render drawn circles */}
+            {circles.map((circle) => (
+              <Group
+                key={circle.id}
+                x={circle.x}
+                y={circle.y}
+                draggable={userRole === "admin" && selectedId !== circle.id}
+                onClick={() => setSelectedId(circle.id)}
+                onDragEnd={(e) => handleCircleDragEnd(e, circle.id)}
+                ref={selectedId === circle.id ? selectedCircleRef : null}
+                onTransform={handleTransformEnd}
+                className="relative"
+              >
+                {selectedId === circle.id && (
+                  <Html>
+                    <Button
+                      className="rounded-full bg-destructive size-6 text-white cursor-pointer -translate-x-1/2"
+                      style={{
+                        position: "absolute",
+                        top: -circle.radius - 12,
+                        right: -25,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteElement(circle.id);
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </Html>
+                )}
+                <Circle
+                  radius={circle.radius}
+                  fill="#f3f4f9"
+                  stroke={selectedId === circle.id ? "#2563eb" : "#4b5563"}
+                  strokeWidth={selectedId === circle.id ? 3 : 2}
+                />
+                <Text
+                  x={0}
+                  y={0}
+                  text={circle.text}
+                  fontSize={16}
+                  fill="#4b5563"
+                  align="center"
+                  verticalAlign="middle"
+                  offsetX={0}
+                  offsetY={8}
+                />
+              </Group>
+            ))}
+
             {/* Render current drawing rectangle */}
-            {currentRect && isDrawing && (
+            {currentRect && isDrawing && drawingMode && (
               <Rect
                 x={currentRect.x}
                 y={currentRect.y}
                 width={currentRect.width}
                 height={currentRect.height}
+                fill="#f3f4f9"
+                stroke="#4b5563"
+                strokeWidth={2}
+                dash={[5, 5]}
+              />
+            )}
+
+            {/* Render current drawing circle */}
+            {currentCircle && isDrawing && circleDrawingMode && (
+              <Circle
+                x={currentCircle.x}
+                y={currentCircle.y}
+                radius={currentCircle.radius}
                 fill="#f3f4f9"
                 stroke="#4b5563"
                 strokeWidth={2}
@@ -731,13 +1636,13 @@ const FloorCanvas = () => {
               />
             ))}
 
-            {/* Transformer for selected bars */}
+            {/* Transformer for selected elements */}
             {userRole === "admin" && (
               <Transformer
                 ref={transformerRef}
                 boundBoxFunc={(oldBox, newBox) => {
                   // Limit minimum size
-                  if (newBox.width < 50 || newBox.height < 30) {
+                  if (newBox.width < 30 || newBox.height < 30) {
                     return oldBox;
                   }
                   return newBox;
@@ -752,7 +1657,7 @@ const FloorCanvas = () => {
                   "middle-left",
                   "middle-right",
                 ]}
-                rotateEnabled={false} // Disable rotation
+                rotateEnabled={false}
                 borderStroke="#2563eb"
                 borderStrokeWidth={2}
                 anchorFill="#2563eb"
@@ -761,13 +1666,15 @@ const FloorCanvas = () => {
               />
             )}
           </Layer>
-          {/* This layer can be used for additional overlays like reservation pins */}
           <Layer name="top-layer" />
         </Stage>
 
         {/* Instructions overlay */}
-        {tables.length === 0 ||
-          (drawnRectangles.length === 0 && (
+        {tables.length === 0 &&
+          bars.length === 0 &&
+          circles.length === 0 &&
+          doors.length === 0 &&
+          plants.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-center text-gray-400">
                 <h3 className="text-2xl font-bold mb-2">
@@ -775,32 +1682,43 @@ const FloorCanvas = () => {
                 </h3>
                 <p className="text-lg">
                   {userRole === "admin"
-                    ? "Drag tables from the sidebar to start designing your layout"
+                    ? "Drag elements from the sidebar to start designing your layout"
                     : "Floor plan ready for reservations"}
                 </p>
               </div>
             </div>
-          ))}
+          )}
 
         {/* Drawing mode indicator */}
-        {drawingMode && (
+        {(drawingMode || circleDrawingMode) && (
           <div className="absolute bottom-4 left-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg">
-            <p className="text-sm font-medium">🎨 Drawing Mode Active</p>
-            <p className="text-xs">Click and drag to draw bars</p>
+            <p className="text-sm font-medium">
+              🎨 {drawingMode ? "Bar Drawing" : "Circle Drawing"} Mode Active
+            </p>
+            <p className="text-xs">
+              Click and drag to draw {drawingMode ? "bars" : "circles"}
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-2"
+              onClick={() => {
+                if (drawingMode && setDrawingMode) {
+                  setDrawingMode(false);
+                }
+                if (circleDrawingMode && setCircleDrawingMode) {
+                  setCircleDrawingMode(false);
+                }
+                setIsDrawing(false);
+                setDrawStart(null);
+                setCurrentRect(null);
+                setCurrentCircle(null);
+              }}
+            >
+              Exit Drawing Mode
+            </Button>
           </div>
         )}
-
-        {/* Transform mode indicator */}
-        {selectedId &&
-          drawnRectangles.find((bar) => bar.id === selectedId) &&
-          userRole === "admin" && (
-            <div className="absolute bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">
-              <p className="text-sm font-medium">🔧 Transform Mode</p>
-              <p className="text-xs">
-                Drag corners to resize, drag center to move
-              </p>
-            </div>
-          )}
       </div>
     </div>
   );

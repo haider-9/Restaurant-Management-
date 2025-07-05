@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Group, Rect, Text, Circle, Image as KonvaImage } from "react-konva";
-import { Portal } from "react-konva-utils";
+import { Html, Portal } from "react-konva-utils";
 import useImage from "use-image";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
+import { useFloorManagement } from "../hooks/use-Floor-Management";
 
 const TableSVG = ({ table, onLoad }) => {
   const [image] = useImage(table.svgPath);
@@ -31,14 +34,22 @@ const TableComponent = ({
   userRole,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [tableImage, setTableImage] = useState(null);
+  const [, setTableImage] = useState(null);
+
+  const { setElements } = useFloorManagement();
 
   // Increased table size with special case for 1 seater
-  const standardWidth = table.seats === 1 ? 80 : 120;
-  const standardHeight = table.seats === 1 ? 120 : 120;
+  const standardWidth = table.seats === 1 ? 80 : 140;
+  const standardHeight = table.seats === 1 ? 120 : 140;
 
   const handleImageLoad = (image) => {
     setTableImage(image);
+  };
+
+  const deleteTable = () => {
+    setElements(prev => prev.filter(element => element.id !== table.id));
+    console.log({ table });
+    
   };
 
   return (
@@ -51,15 +62,33 @@ const TableComponent = ({
       onDragEnd={onDragEnd}
     >
       {/* Selection border only */}
-      {isSelected && (
-        <Rect
-          width={standardWidth}
-          height={standardHeight}
-          fill="transparent"
-          stroke="#f2f2f2f2"
-          strokeWidth={4}
-          cornerRadius={10}
-        />
+      {userRole === "admin" && isSelected && (
+        <Group>
+          <Rect
+            width={table.type !== "table" ? table.width : standardWidth}
+            height={table.type !== "table" ? table.height : standardHeight}
+            fill="transparent"
+            stroke="#f2f2f2f2"
+            strokeWidth={4}
+            cornerRadius={10}
+          />
+          <Html>
+            <Button
+                className="rounded-full bg-destructive size-6 text-white cursor-pointer -translate-x-1/2"
+                style={{
+                  position: "absolute",
+                  top: -12,
+                  left:
+                    table.type !== "table"
+                      ? table.width
+                      : standardWidth,
+                }}
+                onClick={deleteTable}
+              >
+                <X />
+              </Button>
+          </Html>
+        </Group>
       )}
 
       {/* SVG Table Image */}

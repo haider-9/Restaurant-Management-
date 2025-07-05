@@ -1,1 +1,1 @@
-export { FloorManagementProvider, useFloorManagement } from './FloorManagementContext';
+export { FloorManagementProvider } from './FloorManagementContext';

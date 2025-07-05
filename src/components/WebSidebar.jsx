@@ -14,9 +14,13 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Sidebar = () => {
   const location = useLocation();
+  const isMobile = useIsMobile();
+  const isFloorManagement = location.pathname.startsWith("/floor-management");
 
   const menuItems = [
     {
@@ -24,28 +28,28 @@ const Sidebar = () => {
       icon: <LayoutDashboard size={20} strokeWidth={1.5} />,
       path: "/dashboard",
     },
-    { 
-      label: "Booking", 
+    {
+      label: "Booking",
       icon: <CalendarCheck2 size={20} strokeWidth={1.5} />,
       path: "/booking",
     },
-    { 
-      label: "Manage Staff", 
+    {
+      label: "Manage Staff",
       icon: <UsersRound size={20} strokeWidth={1.5} />,
       path: "/manage-staff",
     },
-    { 
-      label: "Assign Staff", 
+    {
+      label: "Assign Staff",
       icon: <UserPlus2 size={20} strokeWidth={1.5} />,
       path: "/assign-staff",
     },
-    { 
-      label: "Manage Event", 
+    {
+      label: "Manage Event",
       icon: <Calendar size={20} strokeWidth={1.5} />,
       path: "/manage-event",
     },
-    { 
-      label: "Report", 
+    {
+      label: "Report",
       icon: <FolderKanban size={20} strokeWidth={1.5} />,
       path: "/report",
     },
@@ -59,17 +63,19 @@ const Sidebar = () => {
       icon: <BookOpenCheck size={20} strokeWidth={1.5} />,
       path: "/guestbook",
     },
-    { 
+    {
       label: "Chat",
       icon: <MessageSquare size={20} strokeWidth={1.5} />,
       path: "/chat",
     },
-    { 
-      label: "Logout", 
+    {
+      label: "Logout",
       icon: <LogOut size={20} strokeWidth={1.5} />,
       path: "/logout",
     },
   ];
+
+
 
   const SidebarContent = () => (
     <div className="h-screen bg-white flex flex-col items-start py-6 px-4">
@@ -88,11 +94,10 @@ const Sidebar = () => {
           <Link
             key={index}
             to={item.path}
-            className={`flex items-center gap-3 text-sm font-medium px-4 py-2.5 rounded-lg transition-all duration-200 w-full text-left ${
-              location.pathname === item.path
+            className={`flex items-center gap-3 text-sm font-medium px-4 py-2.5 rounded-lg transition-all duration-200 w-full text-left ${location.pathname === item.path
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-200 hover:bg-violet-700"
                 : "text-gray-700 hover:bg-violet-50 hover:text-violet-600"
-            }`}
+              }`}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -104,20 +109,24 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div className="hidden md:block md:min-w-[250px] border-r shadow-sm">
-        <SidebarContent />
-      </div>
-
-      {/* Mobile Sidebar */}
-      <Sheet>
-        <SheetTrigger className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md">
-          <Menu size={24} />
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-[250px]">
+      {/* Desktop Sidebar (hide on floor-management route) */}
+      {!isFloorManagement && (
+        <div className="hidden md:block md:min-w-[250px] border-r shadow-sm">
           <SidebarContent />
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
+
+      {/* Sheet Sidebar (always show on floor-management route, trigger always visible) */}
+      {(isFloorManagement || isMobile) && (
+        <Sheet>
+          <SheetTrigger className="fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md">
+            <Menu size={24} />
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-[250px]">
+            <SidebarContent />
+          </SheetContent>
+        </Sheet>
+      )}
     </>
   );
 };

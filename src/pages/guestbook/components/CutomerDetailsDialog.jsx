@@ -27,6 +27,7 @@ import {
   TooltipContent,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function CustomerDetailsDialog({ customer, open, onOpenChange }) {
   const [formData, setFormData] = useState({
@@ -67,24 +68,24 @@ export function CustomerDetailsDialog({ customer, open, onOpenChange }) {
         <ScrollArea className="h-5/6 sm:h-[78vh]">
           <div className="space-y-6">
             {/* Stats Section */}
-            <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="text-center">
-                <div className="text-2xl font-bold">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-2 py-4 bg-muted rounded-lg shadow-md">
+                <div className="text-2xl font-semibold">
                   {customer.totalReservations}
                 </div>
-                <div className="text-sm text-gray-600">Total Reservations</div>
+                <div className="text-sm text-muted-foreground">Total Reservations</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">
+              <div className="text-center p-2 py-4 bg-muted rounded-lg shadow-md">
+                <div className="text-2xl font-semibold">
                   {customer.totalNoShows}
                 </div>
-                <div className="text-sm text-gray-600">Total No-Shows</div>
+                <div className="text-sm text-muted-foreground">Total No-Shows</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">
+              <div className="text-center p-2 py-4 bg-muted rounded-lg shadow-md">
+                <div className="text-2xl font-semibold">
                   {customer.totalCancellations}
                 </div>
-                <div className="text-sm text-gray-600">Total Cancellation</div>
+                <div className="text-sm text-muted-foreground">Total Cancellation</div>
               </div>
             </div>
 
@@ -119,11 +120,20 @@ export function CustomerDetailsDialog({ customer, open, onOpenChange }) {
               </div>
               <div>
                 <Label htmlFor="tag">Tag</Label>
-                <Input
-                  id="tag"
+                <Select
                   value={formData.tag}
-                  onChange={(e) => handleInputChange("tag", e.target.value)}
-                />
+                  onValueChange={(value) => handleInputChange("tag", value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a tag"/>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="returning">Returning</SelectItem>
+                    <SelectItem value="vip">VIP</SelectItem>
+                    <SelectItem value="well-spent">Well Spent</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -156,7 +166,7 @@ export function CustomerDetailsDialog({ customer, open, onOpenChange }) {
             {/* History Section */}
             <div>
               <h3 className="text-lg font-semibold mb-3">History</h3>
-              <div className="border rounded-lg">
+              <div className="rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>
